@@ -204,6 +204,56 @@ class OnnxModel {
     return expected[token];
   }
   
+  // /// Tokenizes input text into token IDs.
+  // List<int> tokenize(String text) {
+  //   final normalized = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+  //   if (normalized.isEmpty) return [eosTokenId];
+
+  //   final tokenIds = <int>[];
+
+  //   // Add space at beginning to help with '▁' token matching
+  //   final textWithSpace = ' $normalized';
+  //   int pos = 1; // Start after the space
+
+  //   while (pos < textWithSpace.length) {
+  //     // Skip whitespace
+  //     if (textWithSpace[pos] == ' ') {
+  //       pos++;
+  //       continue;
+  //     }
+
+  //     String? bestMatch;
+  //     int bestMatchLength = 0;
+
+  //     // Look for tokens that match from current position
+  //     for (final token in _vocab.keys) {
+  //       if (token.isEmpty) continue;
+
+  //       // Check if token matches at current position
+  //       if (pos + token.length <= textWithSpace.length) {
+  //         final substring = textWithSpace.substring(pos, pos + token.length);
+  //         if (substring == token) {
+  //           // Found exact match
+  //           if (token.length > bestMatchLength) {
+  //             bestMatch = token;
+  //             bestMatchLength = token.length;
+  //           }
+  //         }
+  //       }
+  //     }
+
+  //     if (bestMatch != null) {
+  //       tokenIds.add(_vocab[bestMatch]!);
+  //       pos += bestMatchLength;
+  //     } else {
+  //       tokenIds.add(unkTokenId);
+  //       pos++;
+  //     }
+  //   }
+
+  //   tokenIds.add(eosTokenId);
+  //   return tokenIds;
+  // }
   /// Tokenizes input text into token IDs.
   List<int> tokenize(String text) {
     final normalized = text.replaceAll(RegExp(r'\s+'), ' ').trim();
@@ -211,44 +261,66 @@ class OnnxModel {
 
     final tokenIds = <int>[];
 
-    // Add space at beginning to help with '▁' token matching
-    final textWithSpace = ' $normalized';
-    int pos = 1; // Start after the space
+    // Process by words to handle word boundaries correctly
+    final words = normalized.split(' ');
 
-    while (pos < textWithSpace.length) {
-      // Skip whitespace
-      if (textWithSpace[pos] == ' ') {
-        pos++;
-        continue;
-      }
+    for (int wordIndex = 0; wordIndex < words.length; wordIndex++) {
+      final word = words[wordIndex];
+      if (word.isEmpty) continue;
 
-      String? bestMatch;
-      int bestMatchLength = 0;
+      int pos = 0;
+      bool isFirstTokenInWord = true;
 
-      // Look for tokens that match from current position
-      for (final token in _vocab.keys) {
-        if (token.isEmpty) continue;
+      while (pos < word.length) {
+        String? bestMatch;
+        int bestMatchLength = 0;
 
-        // Check if token matches at current position
-        if (pos + token.length <= textWithSpace.length) {
-          final substring = textWithSpace.substring(pos, pos + token.length);
-          if (substring == token) {
-            // Found exact match
-            if (token.length > bestMatchLength) {
-              bestMatch = token;
-              bestMatchLength = token.length;
+        // Look for tokens that match from current position
+        for (final token in _vocab.keys) {
+          if (token.isEmpty) continue;
+
+          // For the first token in a word, we want tokens that start with '▁'
+          // For subsequent tokens in the same word, we want tokens without '▁'
+          final shouldHavePrefix = isFirstTokenInWord;
+          final hasPrefix = token.startsWith('▁');
+
+          if (shouldHavePrefix != hasPrefix) {
+            continue; // Skip tokens that don't match our prefix requirement
+          }
+
+          // Determine what part of the token to compare
+          final compareLength = hasPrefix ? token.length : token.length;
+          final compareStart = hasPrefix ? 1 : 0;
+          final compareToken = hasPrefix ? token.substring(1) : token;
+
+          // Check if this token matches at current position
+          if (pos + compareToken.length <= word.length) {
+            final substring = word.substring(pos, pos + compareToken.length);
+            if (substring == compareToken) {
+              // Found a match, check if it's longer than current best
+              if (compareToken.length > bestMatchLength) {
+                bestMatch = token;
+                bestMatchLength = compareToken.length;
+              }
             }
           }
         }
+
+        if (bestMatch != null) {
+          // Add the token ID
+          tokenIds.add(_vocab[bestMatch]!);
+          pos += bestMatchLength;
+          isFirstTokenInWord =
+              false; // Subsequent tokens in this word don't get '▁'
+        } else {
+          // No match found, use UNK token
+          tokenIds.add(unkTokenId);
+          pos++;
+          isFirstTokenInWord = false;
+        }
       }
 
-      if (bestMatch != null) {
-        tokenIds.add(_vocab[bestMatch]!);
-        pos += bestMatchLength;
-      } else {
-        tokenIds.add(unkTokenId);
-        pos++;
-      }
+      // If there are more words, we'll handle the space in the next iteration
     }
 
     tokenIds.add(eosTokenId);
@@ -298,113 +370,6 @@ class OnnxModel {
     final sumExp = exps.fold<double>(0.0, (a, b) => a + b);
     return exps.map((e) => e / sumExp).toList();
   }
-
-  // Future<String> runModel(
-  //   String inputText, {
-  //   String? initialLangToken,
-  //   int maxNewTokens = 50,
-  // }) async {
-  //   // 1️⃣ Prepare and tokenize input
-  //   String textToTokenize = inputText.trim();
-  //   if (initialLangToken != null && initialLangToken.isNotEmpty) {
-  //     textToTokenize = '$initialLangToken $textToTokenize';
-  //   }
-
-  //   final inputIds = tokenize(textToTokenize);
-  //   final seqLen = inputIds.length;
-  //   final attentionMask = List<int>.filled(seqLen, 1);
-
-  //   // 2️⃣ Run encoder
-  //   final inputTensor = OrtValueTensor.createTensorWithDataList(
-  //       Int64List.fromList(inputIds), [1, seqLen]);
-  //   final attentionMaskTensor = OrtValueTensor.createTensorWithDataList(
-  //       Int64List.fromList(attentionMask), [1, seqLen]);
-
-  //   final encoderInputs = {
-  //     'input_ids': inputTensor,
-  //     'attention_mask': attentionMaskTensor,
-  //   };
-
-  //   final encoderOutputs = await _encoderSession.runAsync(OrtRunOptions(), encoderInputs);
-  //   final encoderHiddenStates = encoderOutputs![0];
-
-  //   // 3️⃣ Initialize decoder state
-  //   final generatedIds = <int>[];
-  //   var decoderInputIds = [padTokenId]; // Start with pad token
-    
-  //   // Store past key values for each layer
-  //   List<OrtValue?> pastKeyValues = List.filled(12, null); // 6 layers * 2 (key + value)
-
-  //   // 4️⃣ First decoder step (using decoder_model.onnx)
-  //   var decInputTensor = OrtValueTensor.createTensorWithDataList(
-  //       Int64List.fromList(decoderInputIds), [1, decoderInputIds.length]);
-
-  //   var decoderInputs = {
-  //     'input_ids': decInputTensor,
-  //     'encoder_hidden_states': encoderHiddenStates!,
-  //     'encoder_attention_mask': attentionMaskTensor,
-  //   };
-
-  //   var decoderOutputs = await _decoderSession.runAsync(OrtRunOptions(), decoderInputs);
-    
-  //   // Extract logits and past key values from first step
-  //   final firstLogitsTensor = decoderOutputs![0];
-  //   // Store past key values (outputs 1-12 are the past key values)
-  //   for (int i = 0; i < 12; i++) {
-  //     pastKeyValues[i] = decoderOutputs[i + 1];
-  //   }
-
-  //   // 5️⃣ Get first token
-  //   final firstLogits = _extractLastStepLogits(firstLogitsTensor!);
-  //   int nextToken = _sampleToken(firstLogits);
-    
-  //   if (nextToken != eosTokenId) {
-  //     generatedIds.add(nextToken);
-  //     decoderInputIds.add(nextToken);
-  //   } else {
-  //     return detokenize(generatedIds);
-  //   }
-
-  //   // 6️⃣ Subsequent steps using decoder_with_past_model.onnx
-  //   for (int step = 1; step < maxNewTokens; step++) {
-  //     // Prepare inputs for decoder_with_past
-  //     final currentInputTensor = OrtValueTensor.createTensorWithDataList(
-  //         Int64List.fromList([nextToken]), [1, 1]);
-
-  //     final pastDecoderInputs = {
-  //       'input_ids': currentInputTensor,
-  //       'encoder_attention_mask': attentionMaskTensor,
-  //       'encoder_hidden_states': encoderHiddenStates,
-  //     };
-
-  //     // Add past key values to inputs
-  //     for (int i = 0; i < 12; i++) {
-  //       pastDecoderInputs['past_key_values.$i.decoder.key'] = pastKeyValues[i]!;
-  //       pastDecoderInputs['past_key_values.$i.decoder.value'] = pastKeyValues[i + 12]!;
-  //       pastDecoderInputs['past_key_values.$i.encoder.key'] = pastKeyValues[i + 24]!;
-  //       pastDecoderInputs['past_key_values.$i.encoder.value'] = pastKeyValues[i + 36]!;
-  //     }
-
-  //     final pastDecoderOutputs = await _decoderWithPastSession.runAsync(
-  //         OrtRunOptions(), pastDecoderInputs);
-
-  //     // Update past key values
-  //     final newLogitsTensor = pastDecoderOutputs![0];
-  //     for (int i = 0; i < 12; i++) {
-  //       pastKeyValues[i] = pastDecoderOutputs[i + 1];
-  //     }
-
-  //     // Sample next token
-  //     final logits = _extractLastStepLogits(newLogitsTensor!);
-  //     nextToken = _sampleToken(logits);
-
-  //     if (nextToken == eosTokenId) break;
-      
-  //     generatedIds.add(nextToken);
-  //   }
-
-  //   return detokenize(generatedIds).trim();
-  // }
 
   //Simple fix
     Future<String> runModel(
