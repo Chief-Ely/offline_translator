@@ -211,51 +211,61 @@ class OnnxModel {
 
     final tokenIds = <int>[];
     int pos = 0;
+    bool atWordStart = true; // Track if we're at the start of a word
 
     while (pos < normalized.length) {
-      // Skip whitespace
+      // Skip whitespace and mark next position as word start
       if (normalized[pos] == ' ') {
         pos++;
+        atWordStart = true;
         continue;
       }
 
-      // Try to match the longest possible token from current position
-      String? longestMatch;
-      int longestMatchId = unkTokenId;
+      String? bestMatch;
+      int bestMatchLength = 0;
 
-      // Look for the longest matching token
-      for (final entry in _vocab.entries) {
-        final token = entry.key;
+      // Look for the longest possible token match
+      for (final token in _vocab.keys) {
         if (token.isEmpty) continue;
 
+        // If we're at word start, prefer tokens that start with '▁'
+        // If we're in the middle of a word, prefer tokens without '▁'
+        final currentToken = atWordStart && token.startsWith('▁')
+            ? token
+            : token;
+
         // Check if this token matches at current position
-        if (pos + token.length <= normalized.length) {
-          final substring = normalized.substring(pos, pos + token.length);
-          if (substring == token) {
-            // Found a match, check if it's longer than current longest
-            if (longestMatch == null || token.length > longestMatch.length) {
-              longestMatch = token;
-              longestMatchId = entry.value;
+        if (pos + currentToken.length <= normalized.length) {
+          final substring = normalized.substring(
+            pos,
+            pos + currentToken.length,
+          );
+          if (substring == currentToken) {
+            // Found a match, check if it's the longest so far
+            if (currentToken.length > bestMatchLength) {
+              bestMatch = token; // Store the original token with '▁' if present
+              bestMatchLength = currentToken.length;
             }
           }
         }
       }
 
-      if (longestMatch != null) {
-        // Found a token match
-        tokenIds.add(longestMatchId);
-        pos += longestMatch.length;
+      if (bestMatch != null) {
+        // Add the token ID
+        tokenIds.add(_vocab[bestMatch]!);
+        pos += bestMatchLength;
+        atWordStart = false; // We're now in the middle of a word
       } else {
-        // No match found, use UNK token and move forward
+        // No match found
         tokenIds.add(unkTokenId);
         pos++;
+        atWordStart = false;
       }
     }
 
     tokenIds.add(eosTokenId);
     return tokenIds;
   }
-
   /// Checks if a token string is punctuation.
   bool _isPunctuation(String token) {
     const punctuations = {
