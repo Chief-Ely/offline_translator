@@ -282,6 +282,7 @@ class OnnxModel {
   //   return TokenizeResult(tokenIds, debugInfo.toString());
   // }
   /// Tokenizes input text into token IDs - Python-compatible version
+  /// SentencePiece-compatible tokenization - PRESERVES CASE
   TokenizeResult tokenize(String text) {
     final normalized = text.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (normalized.isEmpty) {
@@ -291,31 +292,30 @@ class OnnxModel {
     final tokenIds = <int>[];
     final debugInfo = StringBuffer();
 
-    // Add space at beginning to help with '▁' token matching (like Python does)
-    final textWithSpace = ' $normalized';
-    int pos = 1;
-
     debugInfo.writeln('=== TOKENIZATION DEBUG ===');
     debugInfo.writeln('Input: "$text"');
-    debugInfo.writeln('Processing: "$textWithSpace"');
+    debugInfo.writeln('Normalized: "$normalized"');
     debugInfo.writeln('');
 
-    while (pos < textWithSpace.length) {
-      if (textWithSpace[pos] == ' ') {
-        pos++;
-        continue;
-      }
+    // SentencePiece uses '▁' to represent spaces
+    // Add space at beginning and replace spaces with ▁
+    final textWithSpaces = ' $normalized'.replaceAll(' ', '▁');
 
+    debugInfo.writeln('Processed with spaces: "$textWithSpaces"');
+    debugInfo.writeln('');
+
+    int pos = 0;
+    while (pos < textWithSpaces.length) {
       String? bestMatch;
       int bestMatchLength = 0;
 
       for (final token in _vocab.keys) {
         if (token.isEmpty) continue;
 
-        // Exact matching like Python tokenizer
-        if (pos + token.length <= textWithSpace.length) {
-          final substring = textWithSpace.substring(pos, pos + token.length);
+        if (pos + token.length <= textWithSpaces.length) {
+          final substring = textWithSpaces.substring(pos, pos + token.length);
           if (substring == token) {
+            // Prefer longer matches (SentencePiece behavior)
             if (token.length > bestMatchLength) {
               bestMatch = token;
               bestMatchLength = token.length;
@@ -331,7 +331,9 @@ class OnnxModel {
         pos += bestMatchLength;
       } else {
         tokenIds.add(unkTokenId);
-        debugInfo.writeln('  POS $pos: No match -> UNK');
+        debugInfo.writeln(
+          '  POS $pos: No match for "${textWithSpaces[pos]}" -> UNK',
+        );
         pos++;
       }
     }
