@@ -210,56 +210,47 @@ class OnnxModel {
     if (normalized.isEmpty) return [eosTokenId];
 
     final tokenIds = <int>[];
-    int pos = 0;
-    bool atWordStart = true; // Track if we're at the start of a word
+    final words = normalized.split(' ');
 
-    while (pos < normalized.length) {
-      // Skip whitespace and mark next position as word start
-      if (normalized[pos] == ' ') {
-        pos++;
-        atWordStart = true;
-        continue;
-      }
+    for (int i = 0; i < words.length; i++) {
+      final word = words[i];
+      if (word.isEmpty) continue;
 
-      String? bestMatch;
-      int bestMatchLength = 0;
+      int pos = 0;
 
-      // Look for the longest possible token match
-      for (final token in _vocab.keys) {
-        if (token.isEmpty) continue;
+      while (pos < word.length) {
+        String? bestMatch;
+        int bestMatchLength = 0;
 
-        // If we're at word start, prefer tokens that start with '▁'
-        // If we're in the middle of a word, prefer tokens without '▁'
-        final currentToken = atWordStart && token.startsWith('▁')
-            ? token
-            : token;
+        // For the first token in a word, look for tokens starting with '▁'
+        final searchTokens = pos == 0
+            ? _vocab.keys.where((token) => token.startsWith('▁')).toList()
+            : _vocab.keys.where((token) => !token.startsWith('▁')).toList();
 
-        // Check if this token matches at current position
-        if (pos + currentToken.length <= normalized.length) {
-          final substring = normalized.substring(
-            pos,
-            pos + currentToken.length,
-          );
-          if (substring == currentToken) {
-            // Found a match, check if it's the longest so far
-            if (currentToken.length > bestMatchLength) {
-              bestMatch = token; // Store the original token with '▁' if present
-              bestMatchLength = currentToken.length;
+        for (final token in searchTokens) {
+          // Remove the '▁' prefix when comparing for first token
+          final compareToken = pos == 0 && token.startsWith('▁')
+              ? token.substring(1)
+              : token;
+
+          if (pos + compareToken.length <= word.length) {
+            final substring = word.substring(pos, pos + compareToken.length);
+            if (substring == compareToken) {
+              if (compareToken.length > bestMatchLength) {
+                bestMatch = token;
+                bestMatchLength = compareToken.length;
+              }
             }
           }
         }
-      }
 
-      if (bestMatch != null) {
-        // Add the token ID
-        tokenIds.add(_vocab[bestMatch]!);
-        pos += bestMatchLength;
-        atWordStart = false; // We're now in the middle of a word
-      } else {
-        // No match found
-        tokenIds.add(unkTokenId);
-        pos++;
-        atWordStart = false;
+        if (bestMatch != null) {
+          tokenIds.add(_vocab[bestMatch]!);
+          pos += bestMatchLength;
+        } else {
+          tokenIds.add(unkTokenId);
+          pos++;
+        }
       }
     }
 
