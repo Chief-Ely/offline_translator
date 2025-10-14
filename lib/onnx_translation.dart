@@ -4,6 +4,13 @@ import 'package:flutter/services.dart';
 import 'package:onnxruntime/onnxruntime.dart';
 import 'dart:typed_data';
 
+class TokenizeResult {
+  final List<int> tokenIds;
+  final String debugInfo;
+
+  TokenizeResult(this.tokenIds, this.debugInfo);
+}
+
 class OnnxModel {
   late OrtSession _encoderSession;
   late OrtSession _decoderSession;
@@ -203,101 +210,47 @@ class OnnxModel {
     };
     return expected[token];
   }
-  
-  // /// Tokenizes input text into token IDs.
-  // List<int> tokenize(String text) {
-  //   final normalized = text.replaceAll(RegExp(r'\s+'), ' ').trim();
-  //   if (normalized.isEmpty) return [eosTokenId];
 
-  //   final tokenIds = <int>[];
-
-  //   // Add space at beginning to help with '▁' token matching
-  //   final textWithSpace = ' $normalized';
-  //   int pos = 1; // Start after the space
-
-  //   while (pos < textWithSpace.length) {
-  //     // Skip whitespace
-  //     if (textWithSpace[pos] == ' ') {
-  //       pos++;
-  //       continue;
-  //     }
-
-  //     String? bestMatch;
-  //     int bestMatchLength = 0;
-
-  //     // Look for tokens that match from current position
-  //     for (final token in _vocab.keys) {
-  //       if (token.isEmpty) continue;
-
-  //       // Check if token matches at current position
-  //       if (pos + token.length <= textWithSpace.length) {
-  //         final substring = textWithSpace.substring(pos, pos + token.length);
-  //         if (substring == token) {
-  //           // Found exact match
-  //           if (token.length > bestMatchLength) {
-  //             bestMatch = token;
-  //             bestMatchLength = token.length;
-  //           }
-  //         }
-  //       }
-  //     }
-
-  //     if (bestMatch != null) {
-  //       tokenIds.add(_vocab[bestMatch]!);
-  //       pos += bestMatchLength;
-  //     } else {
-  //       tokenIds.add(unkTokenId);
-  //       pos++;
-  //     }
-  //   }
-
-  //   tokenIds.add(eosTokenId);
-  //   return tokenIds;
-  // }
-  /// Tokenizes input text into token IDs.
-  List<int> tokenize(String text) {
+  /// Tokenizes input text into token IDs with debug info
+  TokenizeResult tokenize(String text) {
     final normalized = text.replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (normalized.isEmpty) return [eosTokenId];
+    if (normalized.isEmpty) {
+      return TokenizeResult([eosTokenId], 'Empty input');
+    }
 
     final tokenIds = <int>[];
-
-    // Process by words to handle word boundaries correctly
+    final debugInfo = StringBuffer();
     final words = normalized.split(' ');
+
+    debugInfo.writeln('=== TOKENIZATION DEBUG ===');
+    debugInfo.writeln('Input: "$text"');
+    debugInfo.writeln('Words: $words');
+    debugInfo.writeln('');
 
     for (int wordIndex = 0; wordIndex < words.length; wordIndex++) {
       final word = words[wordIndex];
       if (word.isEmpty) continue;
 
+      debugInfo.writeln('Word: "$word"');
       int pos = 0;
-      bool isFirstTokenInWord = true;
 
       while (pos < word.length) {
         String? bestMatch;
         int bestMatchLength = 0;
 
-        // Look for tokens that match from current position
         for (final token in _vocab.keys) {
           if (token.isEmpty) continue;
 
-          // For the first token in a word, we want tokens that start with '▁'
-          // For subsequent tokens in the same word, we want tokens without '▁'
-          final shouldHavePrefix = isFirstTokenInWord;
+          final isFirstTokenInWord = (pos == 0);
           final hasPrefix = token.startsWith('▁');
 
-          if (shouldHavePrefix != hasPrefix) {
-            continue; // Skip tokens that don't match our prefix requirement
-          }
+          if (isFirstTokenInWord != hasPrefix) continue;
 
-          // Determine what part of the token to compare
-          final compareLength = hasPrefix ? token.length : token.length;
-          final compareStart = hasPrefix ? 1 : 0;
           final compareToken = hasPrefix ? token.substring(1) : token;
 
-          // Check if this token matches at current position
           if (pos + compareToken.length <= word.length) {
             final substring = word.substring(pos, pos + compareToken.length);
             if (substring == compareToken) {
-              // Found a match, check if it's longer than current best
               if (compareToken.length > bestMatchLength) {
                 bestMatch = token;
                 bestMatchLength = compareToken.length;
@@ -307,25 +260,28 @@ class OnnxModel {
         }
 
         if (bestMatch != null) {
-          // Add the token ID
-          tokenIds.add(_vocab[bestMatch]!);
+          final tokenId = _vocab[bestMatch]!;
+          tokenIds.add(tokenId);
+          debugInfo.writeln('  POS $pos: "$bestMatch" -> $tokenId');
           pos += bestMatchLength;
-          isFirstTokenInWord =
-              false; // Subsequent tokens in this word don't get '▁'
         } else {
-          // No match found, use UNK token
           tokenIds.add(unkTokenId);
+          debugInfo.writeln('  POS $pos: No match -> UNK');
           pos++;
-          isFirstTokenInWord = false;
         }
       }
-
-      // If there are more words, we'll handle the space in the next iteration
     }
 
     tokenIds.add(eosTokenId);
-    return tokenIds;
+    
+    debugInfo.writeln('');
+    debugInfo.writeln('=== FINAL RESULT ===');
+    debugInfo.writeln('Token IDs: $tokenIds');
+    debugInfo.writeln('Tokens: ${tokenIds.map((id) => reverseVocab[id] ?? "<unk>").toList()}');
+
+    return TokenizeResult(tokenIds, debugInfo.toString());
   }
+  
   /// Checks if a token string is punctuation.
   bool _isPunctuation(String token) {
     const punctuations = {
@@ -372,33 +328,37 @@ class OnnxModel {
   }
 
   //Simple fix
-    Future<String> runModel(
+  Future<String> runModel(
     String inputText, {
     String? initialLangToken,
     int maxNewTokens = 50,
   }) async {
     try {
-      // 1️⃣ Prepare and tokenize input
+      print('=== STARTING TRANSLATION ===');
+      print('Input: "$inputText"');
+
+      // 1️⃣ Tokenize input
       String textToTokenize = inputText.trim();
       if (initialLangToken != null && initialLangToken.isNotEmpty) {
         textToTokenize = '$initialLangToken $textToTokenize';
       }
 
-      final inputIds = tokenize(textToTokenize);
+      final result = tokenize(textToTokenize);
+      final inputIds = result.tokenIds;
       final seqLen = inputIds.length;
       final attentionMask = List<int>.filled(seqLen, 1);
 
-      print('Input: "$inputText"');
-      print('Tokenized: $inputIds');
+      print('Token IDs: $inputIds');
+      print('Sequence length: $seqLen');
 
-      // 2️⃣ Run encoder
+      // 2️⃣ Run encoder - MATCH EXACT SPECIFICATIONS
       final inputTensor = OrtValueTensor.createTensorWithDataList(
-        Int64List.fromList(inputIds),
-        [1, seqLen],
+        Int64List.fromList(inputIds), // int64 for input_ids
+        [1, seqLen], // batch_size, encoder_sequence_length
       );
       final attentionMaskTensor = OrtValueTensor.createTensorWithDataList(
-        Int64List.fromList(attentionMask),
-        [1, seqLen],
+        Int64List.fromList(attentionMask), // int64 for attention_mask
+        [1, seqLen], // batch_size, encoder_sequence_length
       );
 
       final encoderInputs = {
@@ -406,26 +366,38 @@ class OnnxModel {
         'attention_mask': attentionMaskTensor,
       };
 
+      print('Running encoder...');
       final encoderOutputs = await _encoderSession.runAsync(
         OrtRunOptions(),
         encoderInputs,
       );
-      final encoderHiddenStates = encoderOutputs![0];
 
-      // 3️⃣ Generate tokens using only the basic decoder (no past key values)
+      if (encoderOutputs == null || encoderOutputs.isEmpty) {
+        throw Exception('Encoder returned no outputs');
+      }
+
+      final encoderHiddenStates =
+          encoderOutputs[0]; // last_hidden_state: float32
+      print('Encoder completed - hidden states shape: [1, $seqLen, 512]');
+
+      // 3️⃣ Generate translation using decoder
       final generatedIds = <int>[];
       var decoderInputIds = [padTokenId];
 
+      print('Starting generation with decoder...');
+
       for (int step = 0; step < maxNewTokens; step++) {
+        // Create decoder inputs - MATCH EXACT SPECIFICATIONS
         final decInputTensor = OrtValueTensor.createTensorWithDataList(
-          Int64List.fromList(decoderInputIds),
-          [1, decoderInputIds.length],
+          Int64List.fromList(decoderInputIds), // int64 for input_ids
+          [1, decoderInputIds.length], // batch_size, decoder_sequence_length
         );
 
+        // Note: decoder expects 'encoder_attention_mask' not 'attention_mask'
         final decoderInputs = {
           'input_ids': decInputTensor,
-          'encoder_hidden_states': encoderHiddenStates!,
-          'encoder_attention_mask': attentionMaskTensor,
+          'encoder_hidden_states': encoderHiddenStates!, // float32
+          'encoder_attention_mask': attentionMaskTensor, // int64 - CORRECT NAME
         };
 
         final decoderOutputs = await _decoderSession.runAsync(
@@ -433,80 +405,83 @@ class OnnxModel {
           decoderInputs,
         );
 
-        // Extract logits from the last token position
-        final logitsTensor = decoderOutputs![0];
+        if (decoderOutputs == null || decoderOutputs.isEmpty) {
+          throw Exception('Decoder returned no outputs at step $step');
+        }
+
+        // Extract logits - first output is logits: float32
+        final logitsTensor = decoderOutputs[0];
         final logits = _extractLastStepLogits(logitsTensor!);
+
+        if (logits.isEmpty) {
+          print('Warning: Empty logits at step $step');
+          break;
+        }
 
         // Sample next token
         final nextToken = _sampleToken(logits);
+        final tokenText = reverseVocab[nextToken] ?? '<unk>';
 
-        if (nextToken == eosTokenId) break;
+        print('Step $step: $nextToken ("$tokenText")');
+
+        // Stop conditions
+        if (nextToken == eosTokenId) {
+          print('Generated EOS token, stopping.');
+          break;
+        }
 
         generatedIds.add(nextToken);
         decoderInputIds.add(nextToken);
 
-        print('Step $step: generated $nextToken (${reverseVocab[nextToken]})');
-
-        // Stop if we're generating too much
-        if (step >= maxNewTokens - 1) break;
+        // Additional stop condition for very long sequences
+        if (generatedIds.length >= maxNewTokens) {
+          print('Reached max token limit, stopping.');
+          break;
+        }
       }
 
-      final result = detokenize(generatedIds).trim();
-      print('Final result: "$result"');
-      return result;
+      final translation = detokenize(generatedIds).trim();
+      print('=== TRANSLATION COMPLETE ===');
+      print('Final: "$translation"');
+      print('Generated IDs: $generatedIds');
+
+      return translation;
     } catch (e) {
-      print('Translation error: $e');
+      print('=== TRANSLATION FAILED ===');
+      print('Error: $e');
       print('Stack trace: ${e.toString()}');
       rethrow;
     }
   }
 
-  // /// Helper method to extract logits from the last token position
-  // List<double> _extractLastStepLogits(OrtValue logitsTensor) {
-  //   final raw = logitsTensor.value;
-
-  //   if (raw is List && raw.isNotEmpty) {
-  //     // Handle 3D tensor: [batch_size, sequence_length, vocab_size]
-  //     if (raw[0] is List && (raw[0] as List).isNotEmpty) {
-  //       final batch = raw[0] as List<dynamic>;
-  //       final lastStep = batch.last as List<dynamic>;
-  //       return lastStep.map((e) => (e as num).toDouble()).toList();
-  //     }
-  //     // Handle 2D tensor: [batch_size, vocab_size]
-  //     else if (raw[0] is num) {
-  //       return raw.map((e) => (e as num).toDouble()).toList();
-  //     }
-  //   }
-
-  //   // Fallback: return empty list
-  //   return [];
-  // }
   List<double> _extractLastStepLogits(OrtValue logitsTensor) {
     try {
       final raw = logitsTensor.value;
-
+      
       if (raw is List && raw.isNotEmpty) {
-        // Handle 3D tensor: [batch_size, sequence_length, vocab_size]
+        // Handle 3D tensor: [batch_size, decoder_sequence_length, vocab_size]
         if (raw[0] is List) {
-          final batch = raw[0] as List<dynamic>;
+          final batch = raw[0] as List<dynamic>; // batch_size = 1
           if (batch.isNotEmpty) {
+            // Get the last token in the sequence
             final lastStep = batch.last;
             if (lastStep is List) {
               return lastStep.map((e) => (e as num).toDouble()).toList();
             }
           }
-        }
-        // Handle 2D tensor: [batch_size, vocab_size]
-        else if (raw[0] is num) {
-          return raw.map((e) => (e as num).toDouble()).toList();
+          // If we can't get last step, try first step as fallback
+          if (batch.isNotEmpty && batch[0] is List) {
+            return (batch[0] as List<dynamic>).map((e) => (e as num).toDouble()).toList();
+          }
         }
       }
-
-      print('Warning: Could not extract logits properly');
-      return List.filled(56824, 0.0); // Return zeros as fallback
+      
+      print('Warning: Could not extract logits properly, using fallback');
+      return List.filled(56824, 0.0); // vocab_size = 56824
+      
     } catch (e) {
       print('Error extracting logits: $e');
-      return List.filled(56824, 0.0); // Return zeros as fallback
+      return List.filled(56824, 0.0);
     }
   }
 

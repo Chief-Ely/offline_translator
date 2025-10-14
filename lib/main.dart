@@ -128,26 +128,23 @@ class _TranslationTestPageState extends State<TranslationTestPage> {
     if (!_isInitialized || _tokenizationController.text.isEmpty) return;
     
     try {
-      final tokenIds = _model.tokenize(_tokenizationController.text);
-      final tokens = tokenIds.map((id) => _model.reverseVocab[id] ?? '<unk>').toList();
+      final result = _model.tokenize(_tokenizationController.text);
+      final tokens = result.tokenIds.map((id) => _model.reverseVocab[id] ?? '<unk>').toList();
       
-      final result = '''
-=== TOKENIZATION RESULTS ===
-Input: "${_tokenizationController.text}"
-Token IDs: $tokenIds
-Tokens: $tokens
-Detokenized: "${_model.detokenize(tokenIds)}"
+      final uiResult = '''
+  ${result.debugInfo}
 
-=== TOKEN DETAILS ===
-${_getTokenDetails(tokenIds)}
+  === SUMMARY ===
+  Input: "${_tokenizationController.text}"
+  Detokenized: "${_model.detokenize(result.tokenIds)}"
 
-=== EXPECTED PYTHON OUTPUT ===
-For "Kamusta ka": [921, 34088, 86, 17, 0]
-Tokens: ['▁Ka', 'must', 'a', '▁ka', '</s>']
-''';
+  === EXPECTED PYTHON ===
+  For "Kamusta ka": [921, 34088, 86, 17, 0]
+  Tokens: ['▁Ka', 'must', 'a', '▁ka', '</s>']
+  ''';
       
       setState(() {
-        _tokenizationOutputController.text = result;
+        _tokenizationOutputController.text = uiResult;
         _statusMessage = 'Tokenization test completed!';
       });
     } catch (e) {
