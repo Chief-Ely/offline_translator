@@ -210,47 +210,44 @@ class OnnxModel {
     if (normalized.isEmpty) return [eosTokenId];
 
     final tokenIds = <int>[];
-    final words = normalized.split(' ');
 
-    for (int i = 0; i < words.length; i++) {
-      final word = words[i];
-      if (word.isEmpty) continue;
+    // Add space at beginning to help with '▁' token matching
+    final textWithSpace = ' $normalized';
+    int pos = 1; // Start after the space
 
-      int pos = 0;
+    while (pos < textWithSpace.length) {
+      // Skip whitespace
+      if (textWithSpace[pos] == ' ') {
+        pos++;
+        continue;
+      }
 
-      while (pos < word.length) {
-        String? bestMatch;
-        int bestMatchLength = 0;
+      String? bestMatch;
+      int bestMatchLength = 0;
 
-        // For the first token in a word, look for tokens starting with '▁'
-        final searchTokens = pos == 0
-            ? _vocab.keys.where((token) => token.startsWith('▁')).toList()
-            : _vocab.keys.where((token) => !token.startsWith('▁')).toList();
+      // Look for tokens that match from current position
+      for (final token in _vocab.keys) {
+        if (token.isEmpty) continue;
 
-        for (final token in searchTokens) {
-          // Remove the '▁' prefix when comparing for first token
-          final compareToken = pos == 0 && token.startsWith('▁')
-              ? token.substring(1)
-              : token;
-
-          if (pos + compareToken.length <= word.length) {
-            final substring = word.substring(pos, pos + compareToken.length);
-            if (substring == compareToken) {
-              if (compareToken.length > bestMatchLength) {
-                bestMatch = token;
-                bestMatchLength = compareToken.length;
-              }
+        // Check if token matches at current position
+        if (pos + token.length <= textWithSpace.length) {
+          final substring = textWithSpace.substring(pos, pos + token.length);
+          if (substring == token) {
+            // Found exact match
+            if (token.length > bestMatchLength) {
+              bestMatch = token;
+              bestMatchLength = token.length;
             }
           }
         }
+      }
 
-        if (bestMatch != null) {
-          tokenIds.add(_vocab[bestMatch]!);
-          pos += bestMatchLength;
-        } else {
-          tokenIds.add(unkTokenId);
-          pos++;
-        }
+      if (bestMatch != null) {
+        tokenIds.add(_vocab[bestMatch]!);
+        pos += bestMatchLength;
+      } else {
+        tokenIds.add(unkTokenId);
+        pos++;
       }
     }
 
@@ -302,132 +299,250 @@ class OnnxModel {
     return exps.map((e) => e / sumExp).toList();
   }
 
-  Future<String> runModel(
+  // Future<String> runModel(
+  //   String inputText, {
+  //   String? initialLangToken,
+  //   int maxNewTokens = 50,
+  // }) async {
+  //   // 1️⃣ Prepare and tokenize input
+  //   String textToTokenize = inputText.trim();
+  //   if (initialLangToken != null && initialLangToken.isNotEmpty) {
+  //     textToTokenize = '$initialLangToken $textToTokenize';
+  //   }
+
+  //   final inputIds = tokenize(textToTokenize);
+  //   final seqLen = inputIds.length;
+  //   final attentionMask = List<int>.filled(seqLen, 1);
+
+  //   // 2️⃣ Run encoder
+  //   final inputTensor = OrtValueTensor.createTensorWithDataList(
+  //       Int64List.fromList(inputIds), [1, seqLen]);
+  //   final attentionMaskTensor = OrtValueTensor.createTensorWithDataList(
+  //       Int64List.fromList(attentionMask), [1, seqLen]);
+
+  //   final encoderInputs = {
+  //     'input_ids': inputTensor,
+  //     'attention_mask': attentionMaskTensor,
+  //   };
+
+  //   final encoderOutputs = await _encoderSession.runAsync(OrtRunOptions(), encoderInputs);
+  //   final encoderHiddenStates = encoderOutputs![0];
+
+  //   // 3️⃣ Initialize decoder state
+  //   final generatedIds = <int>[];
+  //   var decoderInputIds = [padTokenId]; // Start with pad token
+    
+  //   // Store past key values for each layer
+  //   List<OrtValue?> pastKeyValues = List.filled(12, null); // 6 layers * 2 (key + value)
+
+  //   // 4️⃣ First decoder step (using decoder_model.onnx)
+  //   var decInputTensor = OrtValueTensor.createTensorWithDataList(
+  //       Int64List.fromList(decoderInputIds), [1, decoderInputIds.length]);
+
+  //   var decoderInputs = {
+  //     'input_ids': decInputTensor,
+  //     'encoder_hidden_states': encoderHiddenStates!,
+  //     'encoder_attention_mask': attentionMaskTensor,
+  //   };
+
+  //   var decoderOutputs = await _decoderSession.runAsync(OrtRunOptions(), decoderInputs);
+    
+  //   // Extract logits and past key values from first step
+  //   final firstLogitsTensor = decoderOutputs![0];
+  //   // Store past key values (outputs 1-12 are the past key values)
+  //   for (int i = 0; i < 12; i++) {
+  //     pastKeyValues[i] = decoderOutputs[i + 1];
+  //   }
+
+  //   // 5️⃣ Get first token
+  //   final firstLogits = _extractLastStepLogits(firstLogitsTensor!);
+  //   int nextToken = _sampleToken(firstLogits);
+    
+  //   if (nextToken != eosTokenId) {
+  //     generatedIds.add(nextToken);
+  //     decoderInputIds.add(nextToken);
+  //   } else {
+  //     return detokenize(generatedIds);
+  //   }
+
+  //   // 6️⃣ Subsequent steps using decoder_with_past_model.onnx
+  //   for (int step = 1; step < maxNewTokens; step++) {
+  //     // Prepare inputs for decoder_with_past
+  //     final currentInputTensor = OrtValueTensor.createTensorWithDataList(
+  //         Int64List.fromList([nextToken]), [1, 1]);
+
+  //     final pastDecoderInputs = {
+  //       'input_ids': currentInputTensor,
+  //       'encoder_attention_mask': attentionMaskTensor,
+  //       'encoder_hidden_states': encoderHiddenStates,
+  //     };
+
+  //     // Add past key values to inputs
+  //     for (int i = 0; i < 12; i++) {
+  //       pastDecoderInputs['past_key_values.$i.decoder.key'] = pastKeyValues[i]!;
+  //       pastDecoderInputs['past_key_values.$i.decoder.value'] = pastKeyValues[i + 12]!;
+  //       pastDecoderInputs['past_key_values.$i.encoder.key'] = pastKeyValues[i + 24]!;
+  //       pastDecoderInputs['past_key_values.$i.encoder.value'] = pastKeyValues[i + 36]!;
+  //     }
+
+  //     final pastDecoderOutputs = await _decoderWithPastSession.runAsync(
+  //         OrtRunOptions(), pastDecoderInputs);
+
+  //     // Update past key values
+  //     final newLogitsTensor = pastDecoderOutputs![0];
+  //     for (int i = 0; i < 12; i++) {
+  //       pastKeyValues[i] = pastDecoderOutputs[i + 1];
+  //     }
+
+  //     // Sample next token
+  //     final logits = _extractLastStepLogits(newLogitsTensor!);
+  //     nextToken = _sampleToken(logits);
+
+  //     if (nextToken == eosTokenId) break;
+      
+  //     generatedIds.add(nextToken);
+  //   }
+
+  //   return detokenize(generatedIds).trim();
+  // }
+
+  //Simple fix
+    Future<String> runModel(
     String inputText, {
     String? initialLangToken,
     int maxNewTokens = 50,
   }) async {
-    // 1️⃣ Prepare and tokenize input
-    String textToTokenize = inputText.trim();
-    if (initialLangToken != null && initialLangToken.isNotEmpty) {
-      textToTokenize = '$initialLangToken $textToTokenize';
-    }
+    try {
+      // 1️⃣ Prepare and tokenize input
+      String textToTokenize = inputText.trim();
+      if (initialLangToken != null && initialLangToken.isNotEmpty) {
+        textToTokenize = '$initialLangToken $textToTokenize';
+      }
 
-    final inputIds = tokenize(textToTokenize);
-    final seqLen = inputIds.length;
-    final attentionMask = List<int>.filled(seqLen, 1);
+      final inputIds = tokenize(textToTokenize);
+      final seqLen = inputIds.length;
+      final attentionMask = List<int>.filled(seqLen, 1);
 
-    // 2️⃣ Run encoder
-    final inputTensor = OrtValueTensor.createTensorWithDataList(
-        Int64List.fromList(inputIds), [1, seqLen]);
-    final attentionMaskTensor = OrtValueTensor.createTensorWithDataList(
-        Int64List.fromList(attentionMask), [1, seqLen]);
+      print('Input: "$inputText"');
+      print('Tokenized: $inputIds');
 
-    final encoderInputs = {
-      'input_ids': inputTensor,
-      'attention_mask': attentionMaskTensor,
-    };
+      // 2️⃣ Run encoder
+      final inputTensor = OrtValueTensor.createTensorWithDataList(
+        Int64List.fromList(inputIds),
+        [1, seqLen],
+      );
+      final attentionMaskTensor = OrtValueTensor.createTensorWithDataList(
+        Int64List.fromList(attentionMask),
+        [1, seqLen],
+      );
 
-    final encoderOutputs = await _encoderSession.runAsync(OrtRunOptions(), encoderInputs);
-    final encoderHiddenStates = encoderOutputs![0];
-
-    // 3️⃣ Initialize decoder state
-    final generatedIds = <int>[];
-    var decoderInputIds = [padTokenId]; // Start with pad token
-    
-    // Store past key values for each layer
-    List<OrtValue?> pastKeyValues = List.filled(12, null); // 6 layers * 2 (key + value)
-
-    // 4️⃣ First decoder step (using decoder_model.onnx)
-    var decInputTensor = OrtValueTensor.createTensorWithDataList(
-        Int64List.fromList(decoderInputIds), [1, decoderInputIds.length]);
-
-    var decoderInputs = {
-      'input_ids': decInputTensor,
-      'encoder_hidden_states': encoderHiddenStates!,
-      'encoder_attention_mask': attentionMaskTensor,
-    };
-
-    var decoderOutputs = await _decoderSession.runAsync(OrtRunOptions(), decoderInputs);
-    
-    // Extract logits and past key values from first step
-    final firstLogitsTensor = decoderOutputs![0];
-    // Store past key values (outputs 1-12 are the past key values)
-    for (int i = 0; i < 12; i++) {
-      pastKeyValues[i] = decoderOutputs[i + 1];
-    }
-
-    // 5️⃣ Get first token
-    final firstLogits = _extractLastStepLogits(firstLogitsTensor!);
-    int nextToken = _sampleToken(firstLogits);
-    
-    if (nextToken != eosTokenId) {
-      generatedIds.add(nextToken);
-      decoderInputIds.add(nextToken);
-    } else {
-      return detokenize(generatedIds);
-    }
-
-    // 6️⃣ Subsequent steps using decoder_with_past_model.onnx
-    for (int step = 1; step < maxNewTokens; step++) {
-      // Prepare inputs for decoder_with_past
-      final currentInputTensor = OrtValueTensor.createTensorWithDataList(
-          Int64List.fromList([nextToken]), [1, 1]);
-
-      final pastDecoderInputs = {
-        'input_ids': currentInputTensor,
-        'encoder_attention_mask': attentionMaskTensor,
-        'encoder_hidden_states': encoderHiddenStates,
+      final encoderInputs = {
+        'input_ids': inputTensor,
+        'attention_mask': attentionMaskTensor,
       };
 
-      // Add past key values to inputs
-      for (int i = 0; i < 12; i++) {
-        pastDecoderInputs['past_key_values.$i.decoder.key'] = pastKeyValues[i]!;
-        pastDecoderInputs['past_key_values.$i.decoder.value'] = pastKeyValues[i + 12]!;
-        pastDecoderInputs['past_key_values.$i.encoder.key'] = pastKeyValues[i + 24]!;
-        pastDecoderInputs['past_key_values.$i.encoder.value'] = pastKeyValues[i + 36]!;
+      final encoderOutputs = await _encoderSession.runAsync(
+        OrtRunOptions(),
+        encoderInputs,
+      );
+      final encoderHiddenStates = encoderOutputs![0];
+
+      // 3️⃣ Generate tokens using only the basic decoder (no past key values)
+      final generatedIds = <int>[];
+      var decoderInputIds = [padTokenId];
+
+      for (int step = 0; step < maxNewTokens; step++) {
+        final decInputTensor = OrtValueTensor.createTensorWithDataList(
+          Int64List.fromList(decoderInputIds),
+          [1, decoderInputIds.length],
+        );
+
+        final decoderInputs = {
+          'input_ids': decInputTensor,
+          'encoder_hidden_states': encoderHiddenStates!,
+          'encoder_attention_mask': attentionMaskTensor,
+        };
+
+        final decoderOutputs = await _decoderSession.runAsync(
+          OrtRunOptions(),
+          decoderInputs,
+        );
+
+        // Extract logits from the last token position
+        final logitsTensor = decoderOutputs![0];
+        final logits = _extractLastStepLogits(logitsTensor!);
+
+        // Sample next token
+        final nextToken = _sampleToken(logits);
+
+        if (nextToken == eosTokenId) break;
+
+        generatedIds.add(nextToken);
+        decoderInputIds.add(nextToken);
+
+        print('Step $step: generated $nextToken (${reverseVocab[nextToken]})');
+
+        // Stop if we're generating too much
+        if (step >= maxNewTokens - 1) break;
       }
 
-      final pastDecoderOutputs = await _decoderWithPastSession.runAsync(
-          OrtRunOptions(), pastDecoderInputs);
-
-      // Update past key values
-      final newLogitsTensor = pastDecoderOutputs![0];
-      for (int i = 0; i < 12; i++) {
-        pastKeyValues[i] = pastDecoderOutputs[i + 1];
-      }
-
-      // Sample next token
-      final logits = _extractLastStepLogits(newLogitsTensor!);
-      nextToken = _sampleToken(logits);
-
-      if (nextToken == eosTokenId) break;
-      
-      generatedIds.add(nextToken);
+      final result = detokenize(generatedIds).trim();
+      print('Final result: "$result"');
+      return result;
+    } catch (e) {
+      print('Translation error: $e');
+      print('Stack trace: ${e.toString()}');
+      rethrow;
     }
-
-    return detokenize(generatedIds).trim();
   }
 
-  /// Helper method to extract logits from the last token position
+  // /// Helper method to extract logits from the last token position
+  // List<double> _extractLastStepLogits(OrtValue logitsTensor) {
+  //   final raw = logitsTensor.value;
+
+  //   if (raw is List && raw.isNotEmpty) {
+  //     // Handle 3D tensor: [batch_size, sequence_length, vocab_size]
+  //     if (raw[0] is List && (raw[0] as List).isNotEmpty) {
+  //       final batch = raw[0] as List<dynamic>;
+  //       final lastStep = batch.last as List<dynamic>;
+  //       return lastStep.map((e) => (e as num).toDouble()).toList();
+  //     }
+  //     // Handle 2D tensor: [batch_size, vocab_size]
+  //     else if (raw[0] is num) {
+  //       return raw.map((e) => (e as num).toDouble()).toList();
+  //     }
+  //   }
+
+  //   // Fallback: return empty list
+  //   return [];
+  // }
   List<double> _extractLastStepLogits(OrtValue logitsTensor) {
-    final raw = logitsTensor.value;
-    
-    if (raw is List && raw.isNotEmpty) {
-      // Handle 3D tensor: [batch_size, sequence_length, vocab_size]
-      if (raw[0] is List && (raw[0] as List).isNotEmpty) {
-        final batch = raw[0] as List<dynamic>;
-        final lastStep = batch.last as List<dynamic>;
-        return lastStep.map((e) => (e as num).toDouble()).toList();
+    try {
+      final raw = logitsTensor.value;
+
+      if (raw is List && raw.isNotEmpty) {
+        // Handle 3D tensor: [batch_size, sequence_length, vocab_size]
+        if (raw[0] is List) {
+          final batch = raw[0] as List<dynamic>;
+          if (batch.isNotEmpty) {
+            final lastStep = batch.last;
+            if (lastStep is List) {
+              return lastStep.map((e) => (e as num).toDouble()).toList();
+            }
+          }
+        }
+        // Handle 2D tensor: [batch_size, vocab_size]
+        else if (raw[0] is num) {
+          return raw.map((e) => (e as num).toDouble()).toList();
+        }
       }
-      // Handle 2D tensor: [batch_size, vocab_size]  
-      else if (raw[0] is num) {
-        return raw.map((e) => (e as num).toDouble()).toList();
-      }
+
+      print('Warning: Could not extract logits properly');
+      return List.filled(56824, 0.0); // Return zeros as fallback
+    } catch (e) {
+      print('Error extracting logits: $e');
+      return List.filled(56824, 0.0); // Return zeros as fallback
     }
-    
-    // Fallback: return empty list
-    return [];
   }
 
   /// Sample token using greedy decoding
