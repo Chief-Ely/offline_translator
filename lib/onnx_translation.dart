@@ -212,6 +212,76 @@ class OnnxModel {
   }
 
   /// Tokenizes input text into token IDs with debug info
+  // TokenizeResult tokenize(String text) {
+  //   final normalized = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+  //   if (normalized.isEmpty) {
+  //     return TokenizeResult([eosTokenId], 'Empty input');
+  //   }
+
+  //   final tokenIds = <int>[];
+  //   final debugInfo = StringBuffer();
+  //   final words = normalized.split(' ');
+
+  //   debugInfo.writeln('=== TOKENIZATION DEBUG ===');
+  //   debugInfo.writeln('Input: "$text"');
+  //   debugInfo.writeln('Words: $words');
+  //   debugInfo.writeln('');
+
+  //   for (int wordIndex = 0; wordIndex < words.length; wordIndex++) {
+  //     final word = words[wordIndex];
+  //     if (word.isEmpty) continue;
+
+  //     debugInfo.writeln('Word: "$word"');
+  //     int pos = 0;
+
+  //     while (pos < word.length) {
+  //       String? bestMatch;
+  //       int bestMatchLength = 0;
+
+  //       for (final token in _vocab.keys) {
+  //         if (token.isEmpty) continue;
+
+  //         final isFirstTokenInWord = (pos == 0);
+  //         final hasPrefix = token.startsWith('▁');
+
+  //         if (isFirstTokenInWord != hasPrefix) continue;
+
+  //         final compareToken = hasPrefix ? token.substring(1) : token;
+
+  //         if (pos + compareToken.length <= word.length) {
+  //           final substring = word.substring(pos, pos + compareToken.length);
+  //           if (substring == compareToken) {
+  //             if (compareToken.length > bestMatchLength) {
+  //               bestMatch = token;
+  //               bestMatchLength = compareToken.length;
+  //             }
+  //           }
+  //         }
+  //       }
+
+  //       if (bestMatch != null) {
+  //         final tokenId = _vocab[bestMatch]!;
+  //         tokenIds.add(tokenId);
+  //         debugInfo.writeln('  POS $pos: "$bestMatch" -> $tokenId');
+  //         pos += bestMatchLength;
+  //       } else {
+  //         tokenIds.add(unkTokenId);
+  //         debugInfo.writeln('  POS $pos: No match -> UNK');
+  //         pos++;
+  //       }
+  //     }
+  //   }
+
+  //   tokenIds.add(eosTokenId);
+    
+  //   debugInfo.writeln('');
+  //   debugInfo.writeln('=== FINAL RESULT ===');
+  //   debugInfo.writeln('Token IDs: $tokenIds');
+  //   debugInfo.writeln('Tokens: ${tokenIds.map((id) => reverseVocab[id] ?? "<unk>").toList()}');
+
+  //   return TokenizeResult(tokenIds, debugInfo.toString());
+  // }
+  /// Tokenizes input text into token IDs - Python-compatible version
   TokenizeResult tokenize(String text) {
     final normalized = text.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (normalized.isEmpty) {
@@ -220,64 +290,60 @@ class OnnxModel {
 
     final tokenIds = <int>[];
     final debugInfo = StringBuffer();
-    final words = normalized.split(' ');
+
+    // Add space at beginning to help with '▁' token matching (like Python does)
+    final textWithSpace = ' $normalized';
+    int pos = 1;
 
     debugInfo.writeln('=== TOKENIZATION DEBUG ===');
     debugInfo.writeln('Input: "$text"');
-    debugInfo.writeln('Words: $words');
+    debugInfo.writeln('Processing: "$textWithSpace"');
     debugInfo.writeln('');
 
-    for (int wordIndex = 0; wordIndex < words.length; wordIndex++) {
-      final word = words[wordIndex];
-      if (word.isEmpty) continue;
+    while (pos < textWithSpace.length) {
+      if (textWithSpace[pos] == ' ') {
+        pos++;
+        continue;
+      }
 
-      debugInfo.writeln('Word: "$word"');
-      int pos = 0;
+      String? bestMatch;
+      int bestMatchLength = 0;
 
-      while (pos < word.length) {
-        String? bestMatch;
-        int bestMatchLength = 0;
+      for (final token in _vocab.keys) {
+        if (token.isEmpty) continue;
 
-        for (final token in _vocab.keys) {
-          if (token.isEmpty) continue;
-
-          final isFirstTokenInWord = (pos == 0);
-          final hasPrefix = token.startsWith('▁');
-
-          if (isFirstTokenInWord != hasPrefix) continue;
-
-          final compareToken = hasPrefix ? token.substring(1) : token;
-
-          if (pos + compareToken.length <= word.length) {
-            final substring = word.substring(pos, pos + compareToken.length);
-            if (substring == compareToken) {
-              if (compareToken.length > bestMatchLength) {
-                bestMatch = token;
-                bestMatchLength = compareToken.length;
-              }
+        // Exact matching like Python tokenizer
+        if (pos + token.length <= textWithSpace.length) {
+          final substring = textWithSpace.substring(pos, pos + token.length);
+          if (substring == token) {
+            if (token.length > bestMatchLength) {
+              bestMatch = token;
+              bestMatchLength = token.length;
             }
           }
         }
+      }
 
-        if (bestMatch != null) {
-          final tokenId = _vocab[bestMatch]!;
-          tokenIds.add(tokenId);
-          debugInfo.writeln('  POS $pos: "$bestMatch" -> $tokenId');
-          pos += bestMatchLength;
-        } else {
-          tokenIds.add(unkTokenId);
-          debugInfo.writeln('  POS $pos: No match -> UNK');
-          pos++;
-        }
+      if (bestMatch != null) {
+        final tokenId = _vocab[bestMatch]!;
+        tokenIds.add(tokenId);
+        debugInfo.writeln('  POS $pos: "$bestMatch" -> $tokenId');
+        pos += bestMatchLength;
+      } else {
+        tokenIds.add(unkTokenId);
+        debugInfo.writeln('  POS $pos: No match -> UNK');
+        pos++;
       }
     }
 
     tokenIds.add(eosTokenId);
-    
+
     debugInfo.writeln('');
     debugInfo.writeln('=== FINAL RESULT ===');
     debugInfo.writeln('Token IDs: $tokenIds');
-    debugInfo.writeln('Tokens: ${tokenIds.map((id) => reverseVocab[id] ?? "<unk>").toList()}');
+    debugInfo.writeln(
+      'Tokens: ${tokenIds.map((id) => reverseVocab[id] ?? "<unk>").toList()}',
+    );
 
     return TokenizeResult(tokenIds, debugInfo.toString());
   }
