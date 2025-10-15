@@ -89,7 +89,7 @@ jobs:
 
       # 7️⃣ Build debug APK
       - name: Build Debug APK
-        run: flutter build apk --debug --verbose
+        run: flutter build apk --debug
 
       # 8️⃣ Upload APK as artifact
       - name: Upload Debug APK
