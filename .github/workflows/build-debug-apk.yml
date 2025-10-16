@@ -1,179 +1,3 @@
-# # name: Build Flutter Debug APK
-
-# # on:
-# #   push:
-# #     branches:
-# #       - main
-# #   pull_request:
-# #     branches: [main]
-
-# # jobs:
-# #   build:
-# #     name: Build Debug APK
-# #     runs-on: ubuntu-latest
-
-# #     steps:
-# #       # 1️⃣ Checkout the repository
-# #       - name: Checkout code
-# #         uses: actions/checkout@v4
-
-# #       # 2️⃣ Setup Flutter with Android
-# #       - name: Setup Flutter
-# #         uses: subosito/flutter-action@v2
-# #         with:
-# #           flutter-version: '3.32.8'
-# #           android: true
-
-# #       # 4️⃣ Get dependencies
-# #       - name: Install dependencies
-# #         run: flutter pub get
-
-# #       # 5️⃣ Accept Android licenses
-# #       - name: Accept Android Licenses
-# #         run: yes | flutter doctor --android-licenses
-
-# #       # 7️⃣ Build debug APK
-# #       - name: Build Debug APK
-# #         run: flutter build apk --debug
-
-# #       # 8️⃣ Upload APK as artifact
-# #       - name: Upload Debug APK
-# #         uses: actions/upload-artifact@v4
-# #         with:
-# #           name: debug-apk
-# #           path: build/app/outputs/flutter-apk/app-debug.apk
-# # name: Build Flutter Debug APK
-
-# # on:
-# #   push:
-# #     branches:
-# #       - main
-# #   pull_request:
-# #     branches: [main]
-
-# # jobs:
-# #   build:
-# #     name: Build Debug APK
-# #     runs-on: ubuntu-latest
-
-# #     steps:
-# #       # 1️⃣ Checkout the repository
-# #       - name: Checkout code
-# #         uses: actions/checkout@v4
-
-# #       # 2️⃣ Setup Flutter with Android
-# #       - name: Setup Flutter
-# #         uses: subosito/flutter-action@v2
-# #         with:
-# #           flutter-version: '3.32.8'
-# #           android: true
-          
-# #       # 3️⃣ Setup Java (recommended for Android builds)
-# #       - name: Setup Java
-# #         uses: actions/setup-java@v4
-# #         with:
-# #           distribution: 'temurin'
-# #           java-version: '17'
-
-# #       # 4️⃣ Get dependencies
-# #       - name: Install dependencies
-# #         run: flutter pub get
-
-# #       # 5️⃣ Check Flutter doctor
-# #       - name: Flutter doctor
-# #         run: flutter doctor -v
-
-# #       # 6️⃣ Accept Android licenses
-# #       - name: Accept Android Licenses
-# #         run: yes | sdkmanager --licenses || true
-
-# #       # 7️⃣ Build debug APK
-# #       - name: Build Debug APK
-# #         run: flutter build apk --debug
-
-# #       # 8️⃣ Upload APK as artifact
-# #       - name: Upload Debug APK
-# #         uses: actions/upload-artifact@v4
-# #         with:
-# #           name: debug-apk
-# #           path: build/app/outputs/flutter-apk/app-debug.apk
-# #           retention-days: 7
-
-
-# name: Build Flutter Debug APK
-
-# on:
-#   push:
-#     branches:
-#       - main
-#   pull_request:
-#     branches: [main]
-
-# jobs:
-#   build:
-#     name: Build Debug APK
-#     runs-on: ubuntu-latest
-
-#     steps:
-#       # 1️⃣ Checkout the repository
-#       - name: Checkout code
-#         uses: actions/checkout@v4
-
-#       # 2️⃣ Setup Flutter with Android
-#       - name: Setup Flutter
-#         uses: subosito/flutter-action@v2
-#         with:
-#           flutter-version: '3.32.8'
-#           android: true
-          
-#       # 3️⃣ Setup Java (recommended for Android builds)
-#       - name: Setup Java
-#         uses: actions/setup-java@v4
-#         with:
-#           distribution: 'temurin'
-#           java-version: '17'
-
-#       # 🔽 ADD THESE STEPS FOR SERIOUS PYTHON 🔽
-#       # 4️⃣ Setup Python
-#       - name: Setup Python
-#         uses: actions/setup-python@v4
-#         with:
-#           python-version: '3.9'
-
-#       # 5️⃣ Install Python dependencies and setup site-packages
-#       - name: Setup Serious Python Environment
-#         run: |
-#           mkdir -p site-packages
-#           pip install tokenizers sentencepiece protobuf --target site-packages
-#           echo "SERIOUS_PYTHON_SITE_PACKAGES=${{ github.workspace }}/site-packages" >> $GITHUB_ENV
-
-#       # 🔼 END OF ADDED STEPS 🔼
-
-#       # 6️⃣ Get dependencies
-#       - name: Install dependencies
-#         run: flutter pub get
-
-#       # 7️⃣ Check Flutter doctor
-#       - name: Flutter doctor
-#         run: flutter doctor -v
-
-#       # 8️⃣ Accept Android licenses
-#       - name: Accept Android Licenses
-#         run: yes | sdkmanager --licenses || true
-
-#       # 9️⃣ Build debug APK
-#       - name: Build Debug APK
-#         run: flutter build apk --debug
-#         env:
-#           SERIOUS_PYTHON_SITE_PACKAGES: ${{ github.workspace }}/site-packages
-
-#       # 🔟 Upload APK as artifact
-#       - name: Upload Debug APK
-#         uses: actions/upload-artifact@v4
-#         with:
-#           name: debug-apk
-#           path: build/app/outputs/flutter-apk/app-debug.apk
-#           retention-days: 7
 name: Build Flutter Debug APK
 
 on:
@@ -189,60 +13,52 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout the repository
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2️⃣ Setup Flutter with Android
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.32.8'
           android: true
-          
-      # 3️⃣ Setup Java (for Android builds)
+
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # 4️⃣ Setup Python
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.12'
+          python-version: '3.11'
 
-      # 5️⃣ Install Python dependencies for Serious Python
-      - name: Setup Serious Python Environment
-        run: |
-          mkdir -p site-packages
-          pip install onnx onnxruntime onnxruntime-extensions transformers numpy --target site-packages
-          echo "SERIOUS_PYTHON_SITE_PACKAGES=${{ github.workspace }}/site-packages" >> $GITHUB_ENV
-
-      # 6️⃣ Flutter clean to remove cached builds
-      - name: Flutter clean
-        run: flutter clean
-
-      # 7️⃣ Get Flutter dependencies
       - name: Install Flutter dependencies
         run: flutter pub get
 
-      # 8️⃣ Check Flutter doctor
+      - name: Install Python dependencies
+        run: |
+          mkdir -p assets/site-packages
+          pip install onnx onnxruntime onnxruntime-extensions transformers numpy sentencepiece tokenizers protobuf --target assets/site-packages
+
+      - name: Package Serious Python for Android
+        run: |
+          export SERIOUS_PYTHON_SITE_PACKAGES=$(pwd)/assets/site-packages
+          dart run serious_python:main package assets/pyTranslator -p Android --requirements -r assets/pyTranslator/requirements.txt
+        env:
+          SERIOUS_PYTHON_SITE_PACKAGES: ${{ github.workspace }}/assets/site-packages
+
       - name: Flutter doctor
         run: flutter doctor -v
 
-      # 9️⃣ Accept Android licenses
-      - name: Accept Android Licenses
+      - name: Accept Android licenses
         run: yes | sdkmanager --licenses || true
 
-      # 🔟 Build debug APK
       - name: Build Debug APK
         run: flutter build apk --debug
         env:
-          SERIOUS_PYTHON_SITE_PACKAGES: ${{ github.workspace }}/site-packages
+          SERIOUS_PYTHON_SITE_PACKAGES: ${{ github.workspace }}/assets/site-packages
 
-      # 1️⃣1️⃣ Upload APK as artifact
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:

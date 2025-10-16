@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:serious_python/serious_python.dart';
+import 'package:path_provider/path_provider.dart';
 
 void main() {
   runApp(MyApp());
@@ -34,16 +37,18 @@ class _TranslationPageState extends State<TranslationPage> {
   Future<void> _initPython() async {
     try {
       // 1️⃣ Initialize Python environment (optional, if needed)
-      await SeriousPython.run(
-        'assets/pyTranslator',
-        appFileName: 'translator_entry.py',
-        modulePaths: ['assets/pyTranslator'],
-        environmentVariables: {
-          'COMMAND': 'init',
-          'MODEL_PATH': 'assets/pyTranslator/tagalog_to_cebuano', // path to your model
-        },
-        sync: true,
-      );
+    await SeriousPython.run(
+      'assets/pyTranslator/translator.zip',
+      appFileName: 'translator_entry.py',
+      modulePaths: ['assets/site-packages'],
+      environmentVariables: {
+        'COMMAND': 'init',
+        'MODEL_PATH': 'assets/tagalog_to_cebuano',  // ✅ correct path
+        'SERIOUS_PYTHON_SITE_PACKAGES': '${Directory.current.path}/assets/site-packages',
+      },
+      sync: true,
+    );
+
 
       // ✅ Now Python is initialized, no need to call init again
     } catch (_) {
@@ -57,13 +62,13 @@ class _TranslationPageState extends State<TranslationPage> {
 
     try {
       final result = await SeriousPython.run(
-        'assets/pyTranslator',
+        'assets/pyTranslator/translator.zip',
         appFileName: 'translator_entry.py',
-        modulePaths: ['assets/pyTranslator'],
+        modulePaths: ['assets/site-packages'],
         environmentVariables: {
           'COMMAND': 'translate',        // command: init or translate
           'USER_TEXT': _controller.text, // text to translate
-          'MODEL_PATH': 'assets/pyTranslator/tagalog_to_cebuano', // only needed for init
+          'MODEL_PATH': 'assets/tagalog_to_cebuano', // only needed for init
         },
         sync: true,
       );
