@@ -44,7 +44,7 @@ jobs:
       - name: Package Serious Python for Android
         run: |
           export SERIOUS_PYTHON_SITE_PACKAGES=$(pwd)/assets/site-packages
-          dart run serious_python:main package assets/pyTranslator -p Android --requirements -r,assets/pyTranslator/requirements.txt
+          dart run serious_python:main package assets/pyTranslator -p Android --requirements -r assets/pyTranslator/requirements.txt
         env:
           SERIOUS_PYTHON_SITE_PACKAGES: ${{ github.workspace }}/assets/site-packages
 
