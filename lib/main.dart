@@ -33,26 +33,24 @@ class _TranslationPageState extends State<TranslationPage> {
 
   Future<void> _initPython() async {
     try {
-      await SeriousPython.run(
-        'assets/pyTranslator',                // assetPath
-        appFileName: 'translator_entry.py',  // Python entry file
-        modulePaths: ['assets/pyTranslator'],
-        environmentVariables: {},
-        sync: true,
-        // Arguments for init
-      );
+      // 1️⃣ Initialize Python environment (optional, if needed)
       await SeriousPython.run(
         'assets/pyTranslator',
         appFileName: 'translator_entry.py',
         modulePaths: ['assets/pyTranslator'],
-        environmentVariables: {},
+        environmentVariables: {
+          'COMMAND': 'init',
+          'MODEL_PATH': 'assets/pyTranslator/tagalog_to_cebuano', // path to your model
+        },
         sync: true,
-        // init command + model path
       );
+
+      // ✅ Now Python is initialized, no need to call init again
     } catch (_) {
       setState(() => _pythonFailed = true);
     }
   }
+
 
   Future<void> _translateText() async {
     if (_controller.text.isEmpty) return;
@@ -62,10 +60,14 @@ class _TranslationPageState extends State<TranslationPage> {
         'assets/pyTranslator',
         appFileName: 'translator_entry.py',
         modulePaths: ['assets/pyTranslator'],
-        environmentVariables: {},
+        environmentVariables: {
+          'COMMAND': 'translate',        // command: init or translate
+          'USER_TEXT': _controller.text, // text to translate
+          'MODEL_PATH': 'assets/pyTranslator/tagalog_to_cebuano', // only needed for init
+        },
         sync: true,
-        // Arguments: ["translate", user text]
       );
+
       setState(() => _translation = result ?? '');
     } catch (_) {
       setState(() {
@@ -74,6 +76,7 @@ class _TranslationPageState extends State<TranslationPage> {
       });
     }
   }
+
 
   @override
   Widget build(BuildContext context) {

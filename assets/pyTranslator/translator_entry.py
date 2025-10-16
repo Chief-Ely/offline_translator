@@ -1,18 +1,23 @@
+import os
 import sys
 from translator import init_translator, translate
 
-# Entry point for SeriousPython.run
-# sys.argv[1] → command ("init" or "translate")
-# sys.argv[2] → argument (model path or text)
-if len(sys.argv) < 3:
-    sys.exit(1)
+# Read environment variables
+command = os.environ.get("COMMAND")       # "init" or "translate"
+model_path = os.environ.get("MODEL_PATH") # path to your ONNX models
+site_packages = os.environ.get("SERIOUS_PYTHON_SITE_PACKAGES")
 
-command = sys.argv[1]
+# Optional: add site-packages to sys.path
+if site_packages:
+    sys.path.insert(0, site_packages)
 
-if command == "init":
-    model_path = sys.argv[2]
+# Execute command
+if command == "init" and model_path:
     init_translator(model_path)
 elif command == "translate":
-    text = sys.argv[2]
-    result = translate(text)
-    print(result)
+    text = os.environ.get("TEXT")  # the text to translate
+    if text:
+        result = translate(text)
+        print(result)
+else:
+    sys.exit(1)
