@@ -42,6 +42,64 @@
 #         with:
 #           name: debug-apk
 #           path: build/app/outputs/flutter-apk/app-debug.apk
+# name: Build Flutter Debug APK
+
+# on:
+#   push:
+#     branches:
+#       - main
+#   pull_request:
+#     branches: [main]
+
+# jobs:
+#   build:
+#     name: Build Debug APK
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       # 1️⃣ Checkout the repository
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+
+#       # 2️⃣ Setup Flutter with Android
+#       - name: Setup Flutter
+#         uses: subosito/flutter-action@v2
+#         with:
+#           flutter-version: '3.32.8'
+#           android: true
+          
+#       # 3️⃣ Setup Java (recommended for Android builds)
+#       - name: Setup Java
+#         uses: actions/setup-java@v4
+#         with:
+#           distribution: 'temurin'
+#           java-version: '17'
+
+#       # 4️⃣ Get dependencies
+#       - name: Install dependencies
+#         run: flutter pub get
+
+#       # 5️⃣ Check Flutter doctor
+#       - name: Flutter doctor
+#         run: flutter doctor -v
+
+#       # 6️⃣ Accept Android licenses
+#       - name: Accept Android Licenses
+#         run: yes | sdkmanager --licenses || true
+
+#       # 7️⃣ Build debug APK
+#       - name: Build Debug APK
+#         run: flutter build apk --debug
+
+#       # 8️⃣ Upload APK as artifact
+#       - name: Upload Debug APK
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: debug-apk
+#           path: build/app/outputs/flutter-apk/app-debug.apk
+#           retention-days: 7
+
+
 name: Build Flutter Debug APK
 
 on:
@@ -75,23 +133,41 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # 4️⃣ Get dependencies
+      # 🔽 ADD THESE STEPS FOR SERIOUS PYTHON 🔽
+      # 4️⃣ Setup Python
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      # 5️⃣ Install Python dependencies and setup site-packages
+      - name: Setup Serious Python Environment
+        run: |
+          mkdir -p site-packages
+          pip install tokenizers sentencepiece protobuf --target site-packages
+          echo "SERIOUS_PYTHON_SITE_PACKAGES=${{ github.workspace }}/site-packages" >> $GITHUB_ENV
+
+      # 🔼 END OF ADDED STEPS 🔼
+
+      # 6️⃣ Get dependencies
       - name: Install dependencies
         run: flutter pub get
 
-      # 5️⃣ Check Flutter doctor
+      # 7️⃣ Check Flutter doctor
       - name: Flutter doctor
         run: flutter doctor -v
 
-      # 6️⃣ Accept Android licenses
+      # 8️⃣ Accept Android licenses
       - name: Accept Android Licenses
         run: yes | sdkmanager --licenses || true
 
-      # 7️⃣ Build debug APK
+      # 9️⃣ Build debug APK
       - name: Build Debug APK
         run: flutter build apk --debug
+        env:
+          SERIOUS_PYTHON_SITE_PACKAGES: ${{ github.workspace }}/site-packages
 
-      # 8️⃣ Upload APK as artifact
+      # 🔟 Upload APK as artifact
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
